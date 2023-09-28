@@ -31,15 +31,22 @@ class ProductController extends AbstractController
         if (count($errorsValidateTaxNumber) > 0) {
             return $this->json(['status'=> '400', 'errors' => (string) $errorsValidateTaxNumber]);
         }
-        $errorsValidateCouponCode = $validator->validate((new Coupon())->setCode($bodyData['couponCode'] ?? null));
-        if (count($errorsValidateCouponCode) > 0) {
-            return $this->json(['status'=> '400', 'errors' => (string)$errorsValidateCouponCode]);
+        $entityManager = $doctrine->getManager();
+        $coupon = null;
+        if (isset($bodyData['couponCode'])) {
+            $errorsValidateCouponCode = $validator->validate((new Coupon())->setCode($bodyData['couponCode'] ?? null));
+            if (count($errorsValidateCouponCode) > 0) {
+                return $this->json(['status' => '400', 'errors' => (string)$errorsValidateCouponCode]);
+            }
+            $coupon = $entityManager->getRepository(Coupon::class)->findOneBy(['code' => $bodyData['couponCode']]);
+            if (is_null($coupon)) {
+                return $this->json(['status'=> '400', 'message' => 'coupon with code ' . $bodyData['couponCode'] . ' not found']);
+            }
         }
         if (!isset($bodyData['product'])) {
             return $this->json(['status'=> '400', 'error' => 'product field is required']);
         }
 
-        $entityManager = $doctrine->getManager();
         $product = $entityManager->getRepository(Product::class)->find($bodyData['product']);
         if (is_null($product)) {
             return $this->json(['status'=> '400', 'message' => 'product with id ' . $bodyData['product'] . ' not found']);
@@ -50,10 +57,6 @@ class ProductController extends AbstractController
             return $this->json(['status'=> '400', 'message' => 'tax with number ' . $bodyData['taxNumber'] . ' not found']);
         }
 
-        $coupon = $entityManager->getRepository(Coupon::class)->findOneBy(['code' => $bodyData['couponCode']]);
-        if (is_null($coupon)) {
-            return $this->json(['status'=> '400', 'message' => 'coupon with code ' . $bodyData['couponCode'] . ' not found']);
-        }
-        return $this->json(['status'=> '200', 'price' => $product->calculatePriceWithTaxAndCoupon($tax->getValue(), $coupon->getValue(), $coupon->getType())]);
+        return $this->json(['status'=> '200', 'price' => $product->calculatePriceWithTaxAndCoupon($tax->getValue(), !is_null($coupon) ? $coupon->getValue() : null, !is_null($coupon) ? $coupon->getType(): null)]);
     }
 }

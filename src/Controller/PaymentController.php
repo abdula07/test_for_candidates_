@@ -27,15 +27,28 @@ class PaymentController extends AbstractController
      */
     #[Route('purchase', name: 'purchase')]
    public function purchase(Request $request, ManagerRegistry $doctrine, ValidatorInterface $validator): JsonResponse {
+        if (!$request->isMethod('post')) {
+            return $this->json(['status'=> '400', 'error' => 'not supported request type']);
+        }
         $bodyData = $request->toArray();
         $errorsValidateTaxNumber = $validator->validate((new Tax())->setNumber($bodyData['taxNumber'] ?? null));
         if (count($errorsValidateTaxNumber) > 0) {
             return $this->json(['status'=> '400', 'errors' => (string) $errorsValidateTaxNumber]);
         }
-        $errorsValidateCouponCode = $validator->validate((new Coupon())->setCode($bodyData['couponCode'] ?? null));
-        if (count($errorsValidateCouponCode) > 0) {
-            return $this->json(['status'=> '400', 'errors' => (string)$errorsValidateCouponCode]);
+        $entityManager = $doctrine->getManager();
+
+        $coupon = null;
+        if (isset($bodyData['couponCode'])) {
+            $errorsValidateCouponCode = $validator->validate((new Coupon())->setCode($bodyData['couponCode'] ?? null));
+            if (count($errorsValidateCouponCode) > 0) {
+                return $this->json(['status' => '400', 'errors' => (string)$errorsValidateCouponCode]);
+            }
+            $coupon = $entityManager->getRepository(Coupon::class)->findOneBy(['code' => $bodyData['couponCode']]);
+            if (is_null($coupon)) {
+                return $this->json(['status'=> '400', 'error' => 'coupon with code ' . $bodyData['couponCode'] . ' not found']);
+            }
         }
+
         if (!isset($bodyData['product'])) {
             return $this->json(['status'=> '400', 'error' => 'product field is required']);
         }
@@ -43,7 +56,6 @@ class PaymentController extends AbstractController
             return $this->json(['status'=> '400', 'error' => 'paymentProcessor field is required']);
         }
 
-        $entityManager = $doctrine->getManager();
         $product = $entityManager->getRepository(Product::class)->find($bodyData['product']);
         if (is_null($product)) {
             return $this->json(['status'=> '400', 'error' => 'product with id ' . $bodyData['product'] . ' not found']);
@@ -54,10 +66,7 @@ class PaymentController extends AbstractController
             return $this->json(['status'=> '400', 'error' => 'tax with number ' . $bodyData['taxNumber'] . ' not found']);
         }
 
-        $coupon = $entityManager->getRepository(Coupon::class)->findOneBy(['code' => $bodyData['couponCode']]);
-        if (is_null($coupon)) {
-            return $this->json(['status'=> '400', 'error' => 'coupon with code ' . $bodyData['couponCode'] . ' not found']);
-        }
+
         if (!in_array($bodyData['paymentProcessor'], PaymentProcessors::LIST)) {
             return $this->json(['status' => '400', 'error' => 'paymentProcessor not supported payment type']);
         }
@@ -65,14 +74,16 @@ class PaymentController extends AbstractController
         switch ($bodyData['paymentProcessor']) {
             case PaymentProcessors::STRIPE:
                 $stripePaymentProcessor = new StripePaymentProcessor();
-                $resultPay = $stripePaymentProcessor->processPayment($product->calculatePriceWithTaxAndCoupon($tax->getValue(), $coupon->getValue(), $coupon->getType()));
+                $resultPay = $stripePaymentProcessor->processPayment($product->calculatePriceWithTaxAndCoupon($tax->getValue(), !is_null($coupon) ? $coupon->getValue() : null, !is_null($coupon) ? $coupon->getType(): null));
                 break;
         }
         if (!$resultPay) {
             return $this->json(['status' => '400', 'error' => 'payment error']);
         }
         $payment = new Payment();
-        $payment->setCouponId($coupon->getId());
+        if ($coupon) {
+            $payment->setCouponId($coupon->getId());
+        }
         $payment->setPaymentProcessor($bodyData['paymentProcessor']);
         $payment->setTaxId($tax->getId());
         $payment->setProductId($product->getId());

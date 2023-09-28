@@ -34,8 +34,11 @@ class Product
         return $this;
     }
 
-    public function calculatePriceWithTaxAndCoupon($tax, $couponValue, $couponType) {
+    public function calculatePriceWithTaxAndCoupon($tax, $couponValue=null, $couponType=null) {
         $resultPrice = $this->price + (($this->price / 100) * $tax);
+        if ($couponValue == null || $couponType == null) {
+            return $resultPrice;
+        }
         if ($couponType == Coupon::NUMBER) {
             $resultPrice -= $couponValue;
             echo $resultPrice;
