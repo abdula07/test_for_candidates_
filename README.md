@@ -26,7 +26,7 @@ http://127.0.0.1:80/purchase
 
 пример с использованием curl
 1)
-<?php
+
 
 $curl = curl_init();
 
@@ -57,7 +57,7 @@ echo $response;
 
 
 2) 
-<?php
+
 
 $curl = curl_init();
 
