@@ -1,0 +1,48 @@
+<?php
+
+namespace App\Entity;
+
+use App\Repository\ProductRepository;
+use Doctrine\ORM\Mapping as ORM;
+
+
+
+#[ORM\Entity(repositoryClass: ProductRepository::class)]
+class Product
+{
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column]
+    private ?int $id = null;
+
+    #[ORM\Column]
+    private ?int $price = null;
+    public function getId(): ?int
+    {
+        return $this->id;
+    }
+
+    public function getPrice(): ?string
+    {
+        return $this->price;
+    }
+
+    public function setPrice(string $price): static
+    {
+        $this->price = $price;
+
+        return $this;
+    }
+
+    public function calculatePriceWithTaxAndCoupon($tax, $couponValue, $couponType) {
+        $resultPrice = $this->price + (($this->price / 100) * $tax);
+        if ($couponType == Coupon::NUMBER) {
+            $resultPrice -= $couponValue;
+            echo $resultPrice;
+        } else {
+            $resultPrice -= (($this->price / 100) * $couponValue);
+        }
+        return $resultPrice;
+    }
+
+}
